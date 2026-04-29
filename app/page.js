@@ -6,7 +6,7 @@ export default async function Home() {
   const session = await getServerSession(authOptions);
   
   if (!session) {
-    redirect('/login');
+    redirect('/players/register');
   }
   
   if (session.user.role === 'admin') {

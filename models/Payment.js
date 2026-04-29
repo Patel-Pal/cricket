@@ -4,21 +4,22 @@ const paymentSchema = new mongoose.Schema({
   playerId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Player',
-    required: true,
+  },
+  playerName: {
+    type: String,
+  },
+  mobile: {
+    type: String,
   },
   razorpayOrderId: {
     type: String,
     required: true,
-    unique: true,
   },
   razorpayPaymentId: {
     type: String,
-    required: true,
-    unique: true,
   },
   razorpaySignature: {
     type: String,
-    required: true,
   },
   amount: {
     type: Number,

@@ -59,12 +59,15 @@ export default function PlayerRegisterPage() {
   }, []);
 
   const handlePhotoChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onload = () => {
         setImageSrc(reader.result);
         setShowCropper(true);
+      };
+      reader.onerror = () => {
+        toast.error('Failed to read image file');
       };
       reader.readAsDataURL(file);
     }
@@ -72,10 +75,13 @@ export default function PlayerRegisterPage() {
 
   const createCroppedImage = async () => {
     try {
-      const image = new Image();
-      image.src = imageSrc;
-      await new Promise((resolve) => {
+      const image = document.createElement('img');
+      image.crossOrigin = 'anonymous';
+      
+      await new Promise((resolve, reject) => {
         image.onload = resolve;
+        image.onerror = reject;
+        image.src = imageSrc;
       });
 
       const canvas = document.createElement('canvas');
@@ -104,13 +110,15 @@ export default function PlayerRegisterPage() {
     } catch (error) {
       console.error('Error cropping image:', error);
       toast.error('Failed to crop image');
+      return null;
     }
   };
 
   const handleCropSave = async () => {
-    const { file, preview } = await createCroppedImage();
-    setPhotoFile(file);
-    setPhotoPreview(preview);
+    const result = await createCroppedImage();
+    if (!result) return;
+    setPhotoFile(result.file);
+    setPhotoPreview(result.preview);
     setShowCropper(false);
     toast.success('Photo cropped successfully!');
   };
@@ -223,6 +231,18 @@ export default function PlayerRegisterPage() {
         },
         modal: {
           ondismiss: function () {
+            // Record cancelled payment in DB
+            fetch('/api/payments/payment-failed', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: orderData.data.orderId,
+                razorpay_payment_id: null,
+                error_reason: 'Payment cancelled by user',
+                playerName: formData.name,
+                mobile: formData.mobile,
+              }),
+            }).catch(() => {});
             toast.error('Payment cancelled');
             setLoading(false);
           },
@@ -231,6 +251,18 @@ export default function PlayerRegisterPage() {
 
       const rzp = new window.Razorpay(options);
       rzp.on('payment.failed', function (response) {
+        // Record failed payment in DB
+        fetch('/api/payments/payment-failed', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            razorpay_order_id: orderData.data.orderId,
+            razorpay_payment_id: response.error.metadata?.payment_id || null,
+            error_reason: response.error.description || 'Payment failed',
+            playerName: formData.name,
+            mobile: formData.mobile,
+          }),
+        }).catch(() => {});
         toast.error(response.error.description || 'Payment failed');
         setLoading(false);
       });
