@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import { Camera, ArrowLeft, User, Calendar, Hash, MapPin, X } from 'lucide-react';
@@ -35,6 +35,24 @@ export default function PlayerRegisterPage() {
   const [photoPreview, setPhotoPreview] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [razorpayLoaded, setRazorpayLoaded] = useState(false);
+
+  // Load Razorpay SDK script
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.async = true;
+    script.onload = () => setRazorpayLoaded(true);
+    script.onerror = () => {
+      setRazorpayLoaded(false);
+      toast.error('Payment service unavailable. Please try again later.');
+    };
+    document.body.appendChild(script);
+
+    return () => {
+      document.body.removeChild(script);
+    };
+  }, []);
 
   const onCropComplete = useCallback((croppedArea, croppedAreaPixels) => {
     setCroppedAreaPixels(croppedAreaPixels);
@@ -116,24 +134,42 @@ export default function PlayerRegisterPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Validate photo is uploaded
+
     if (!photoFile) {
       toast.error('Please upload and crop a player photo');
       return;
     }
-    
+
+    if (!razorpayLoaded) {
+      toast.error('Payment service unavailable. Please refresh and try again.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      let photoData = null;
+      // Step 1: Upload photo
+      toast.loading('Uploading photo...');
+      const photoData = await uploadFile(photoFile, 'players/photos');
+      toast.dismiss();
 
-      if (photoFile) {
-        toast.loading('Uploading photo...');
-        photoData = await uploadFile(photoFile, 'players/photos');
-        toast.dismiss();
+      // Step 2: Create Razorpay order
+      const orderRes = await fetch('/api/payments/create-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerName: formData.name,
+          mobile: formData.mobile,
+        }),
+      });
+
+      const orderData = await orderRes.json();
+
+      if (!orderData.success) {
+        throw new Error(orderData.error || 'Failed to create payment order');
       }
 
+      // Step 3: Open Razorpay Checkout
       const uniqueEmail = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@cricket.com`;
 
       const playerData = {
@@ -143,23 +179,65 @@ export default function PlayerRegisterPage() {
         identityProof: null,
       };
 
-      const res = await fetch('/api/players', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(playerData),
+      const options = {
+        key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
+        amount: orderData.data.amount,
+        currency: orderData.data.currency,
+        name: 'Cricket Auction Platform',
+        description: 'Player Registration Fee',
+        order_id: orderData.data.orderId,
+        prefill: {
+          name: formData.name,
+          contact: formData.mobile,
+        },
+        theme: {
+          color: '#22c55e',
+        },
+        handler: async function (response) {
+          // Step 4: Verify payment and create player
+          try {
+            const verifyRes = await fetch('/api/payments/verify-payment', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature,
+                playerData,
+              }),
+            });
+
+            const verifyData = await verifyRes.json();
+
+            if (verifyData.success) {
+              toast.success('Registration submitted successfully!');
+              router.push('/');
+            } else {
+              toast.error(verifyData.error || 'Payment verification failed');
+              setLoading(false);
+            }
+          } catch (err) {
+            toast.error('Registration failed: ' + err.message);
+            setLoading(false);
+          }
+        },
+        modal: {
+          ondismiss: function () {
+            toast.error('Payment cancelled');
+            setLoading(false);
+          },
+        },
+      };
+
+      const rzp = new window.Razorpay(options);
+      rzp.on('payment.failed', function (response) {
+        toast.error(response.error.description || 'Payment failed');
+        setLoading(false);
       });
-
-      const data = await res.json();
-
-      if (data.success) {
-        toast.success('Registration submitted for approval');
-        router.push('/');
-      } else {
-        toast.error(data.error);
-      }
+      rzp.open();
     } catch (error) {
+      toast.dismiss();
       toast.error('Registration failed: ' + error.message);
-    } finally {
       setLoading(false);
     }
   };
@@ -213,8 +291,6 @@ export default function PlayerRegisterPage() {
           </div>
         </div>
       )}
-
-
 
       <div className="container mx-auto px-4 py-6 sm:py-8 max-w-2xl">
         {/* Season Badge */}
@@ -374,13 +450,24 @@ export default function PlayerRegisterPage() {
             </div>
           </div>
 
+          {/* Registration Fee Notice */}
+          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 mt-6">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+              <p className="text-white font-semibold text-sm">Registration Fee</p>
+            </div>
+            <p className="text-gray-400 text-sm mt-1">
+              A registration fee is required to complete your registration. You will be redirected to the payment gateway after submitting.
+            </p>
+          </div>
+
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={loading || !photoFile}
+            disabled={loading || !photoFile || !razorpayLoaded}
             className="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-3 sm:py-4 rounded-lg transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed mt-8"
           >
-            {loading ? 'Submitting...' : !photoFile ? 'Upload Photo First' : 'Submit Registration'}
+            {loading ? 'Processing...' : !photoFile ? 'Upload Photo First' : !razorpayLoaded ? 'Loading Payment...' : 'Pay & Register'}
           </button>
           
           {!photoFile && (

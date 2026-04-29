@@ -109,6 +109,11 @@ const playerSchema = new mongoose.Schema({
     type: Boolean,
     default: false,
   },
+  paymentStatus: {
+    type: String,
+    enum: ['unpaid', 'paid'],
+    default: 'unpaid',
+  },
 }, {
   timestamps: true,
 });
