@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { verifyPaymentSignature, createPaymentRecord } from '@/services/paymentService';
 import { createPlayer } from '@/services/playerService';
+import { sendPlayerRegistrationEmail } from '@/lib/email';
 
 export async function POST(request) {
   try {
@@ -54,6 +55,15 @@ export async function POST(request) {
       currency: 'INR',
       status: 'paid',
     });
+
+    // Send notification email to admin (non-blocking)
+    sendPlayerRegistrationEmail({
+      playerName: playerData.name || '',
+      mobile: playerData.mobile || '',
+      category: playerData.category || '',
+      amount: parseInt(process.env.REGISTRATION_FEE_AMOUNT) || 50000,
+      paymentId: razorpay_payment_id,
+    }).catch((err) => console.error('Email notification failed:', err));
 
     return NextResponse.json(
       { success: true, data: { player, payment } },
