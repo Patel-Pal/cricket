@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
 import Link from 'next/link';
-import { Camera, ArrowLeft, User, Calendar, Hash, MapPin, X } from 'lucide-react';
+import { Camera, ArrowLeft, User, Calendar, Hash, MapPin, Mail, X } from 'lucide-react';
 import Cropper from 'react-easy-crop';
 
 export default function PlayerRegisterPage() {
@@ -13,7 +13,7 @@ export default function PlayerRegisterPage() {
     name: '',
     dob: '',
     mobile: '',
-    email: 'default@email.com',
+    email: '',
     address: '',
     city: 'N/A',
     state: 'N/A',
@@ -179,11 +179,8 @@ export default function PlayerRegisterPage() {
       }
 
       // Step 3: Open Razorpay Checkout
-      const uniqueEmail = `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}@cricket.com`;
-
       const playerData = {
         ...formData,
-        email: uniqueEmail,
         photo: photoData,
         identityProof: null,
       };
@@ -219,20 +216,24 @@ export default function PlayerRegisterPage() {
             const verifyData = await verifyRes.json();
 
             if (verifyData.success) {
-              toast.success('Registration submitted successfully!');
-              router.push('/');
+              router.push(
+                `/players/register/success?name=${encodeURIComponent(formData.name)}&pid=${encodeURIComponent(response.razorpay_payment_id)}`
+              );
             } else {
-              toast.error(verifyData.error || 'Payment verification failed');
+              router.push(
+                `/players/register/failed?name=${encodeURIComponent(formData.name)}&reason=${encodeURIComponent(verifyData.error || 'Payment verification failed')}`
+              );
               setLoading(false);
             }
           } catch (err) {
-            toast.error('Registration failed: ' + err.message);
+            router.push(
+              `/players/register/failed?name=${encodeURIComponent(formData.name)}&reason=${encodeURIComponent(err.message || 'Something went wrong')}`
+            );
             setLoading(false);
           }
         },
         modal: {
           ondismiss: function () {
-            // Record cancelled payment in DB
             fetch('/api/payments/payment-failed', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
@@ -244,7 +245,9 @@ export default function PlayerRegisterPage() {
                 mobile: formData.mobile,
               }),
             }).catch(() => {});
-            toast.error('Payment cancelled');
+            router.push(
+              `/players/register/failed?name=${encodeURIComponent(formData.name)}&reason=${encodeURIComponent('Payment was cancelled')}`
+            );
             setLoading(false);
           },
         },
@@ -252,7 +255,6 @@ export default function PlayerRegisterPage() {
 
       const rzp = new window.Razorpay(options);
       rzp.on('payment.failed', function (response) {
-        // Record failed payment in DB
         fetch('/api/payments/payment-failed', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -264,7 +266,9 @@ export default function PlayerRegisterPage() {
             mobile: formData.mobile,
           }),
         }).catch(() => {});
-        toast.error(response.error.description || 'Payment failed');
+        router.push(
+          `/players/register/failed?name=${encodeURIComponent(formData.name)}&reason=${encodeURIComponent(response.error.description || 'Payment failed')}`
+        );
         setLoading(false);
       });
       rzp.open();
@@ -396,6 +400,18 @@ export default function PlayerRegisterPage() {
                 className="w-full bg-gray-800 text-white pl-12 pr-4 py-3 sm:py-4 rounded-lg border border-gray-700 focus:border-green-500 focus:outline-none"
                 value={formData.mobile}
                 onChange={(e) => setFormData({ ...formData, mobile: e.target.value })}
+                required
+              />
+            </div>
+
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+              <input
+                type="email"
+                placeholder="Email Address"
+                className="w-full bg-gray-800 text-white pl-12 pr-4 py-3 sm:py-4 rounded-lg border border-gray-700 focus:border-green-500 focus:outline-none"
+                value={formData.email}
+                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 required
               />
             </div>
