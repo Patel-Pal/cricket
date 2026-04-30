@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, Suspense } from 'react';
 import { signIn } from 'next-auth/react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import toast from 'react-hot-toast';
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [formData, setFormData] = useState({ email: '', password: '' });
   const [loading, setLoading] = useState(false);
 
@@ -25,7 +26,15 @@ export default function LoginPage() {
         toast.error('Invalid credentials');
       } else {
         toast.success('Login successful');
-        // Fetch session to get role and redirect directly
+
+        // Honor callbackUrl set by middleware (e.g. when accessing /admin/dashboard directly)
+        const callbackUrl = searchParams.get('callbackUrl');
+        if (callbackUrl) {
+          router.push(callbackUrl);
+          return;
+        }
+
+        // Otherwise redirect based on role
         const sessionRes = await fetch('/api/auth/session');
         const session = await sessionRes.json();
         const role = session?.user?.role;
@@ -75,5 +84,13 @@ export default function LoginPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen bg-gradient-to-br from-blue-500 to-purple-600" />}>
+      <LoginForm />
+    </Suspense>
   );
 }
