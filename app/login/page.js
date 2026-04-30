@@ -25,7 +25,17 @@ export default function LoginPage() {
         toast.error('Invalid credentials');
       } else {
         toast.success('Login successful');
-        router.push('/');
+        // Fetch session to get role and redirect directly
+        const sessionRes = await fetch('/api/auth/session');
+        const session = await sessionRes.json();
+        const role = session?.user?.role;
+        if (role === 'admin') {
+          router.push('/admin/dashboard');
+        } else if (role === 'owner') {
+          router.push('/owner/dashboard');
+        } else {
+          router.push('/viewer/dashboard');
+        }
       }
     } catch (error) {
       toast.error('Login failed');
