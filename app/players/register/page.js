@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
+import Link from 'next/link';
 import { Camera, ArrowLeft, User, Calendar, Hash, MapPin, X } from 'lucide-react';
 import Cropper from 'react-easy-crop';
 
@@ -508,6 +509,22 @@ export default function PlayerRegisterPage() {
             </p>
           )}
         </form>
+
+        {/* Footer Links */}
+        <div className="mt-10 pt-6 border-t border-gray-800">
+          <div className="flex flex-wrap justify-center gap-3">
+            <Link href="/contact" className="text-gray-500 hover:text-green-400 text-xs transition-colors px-3 py-1.5 rounded-full border border-gray-700 hover:border-green-500/50">
+              Contact Us
+            </Link>
+            <Link href="/terms" className="text-gray-500 hover:text-green-400 text-xs transition-colors px-3 py-1.5 rounded-full border border-gray-700 hover:border-green-500/50">
+              Terms & Conditions
+            </Link>
+            <Link href="/refund" className="text-gray-500 hover:text-green-400 text-xs transition-colors px-3 py-1.5 rounded-full border border-gray-700 hover:border-green-500/50">
+              Refund Policy
+            </Link>
+          </div>
+          <p className="text-gray-600 text-xs text-center mt-4">© 2025 TPL - Tournament Registration Platform</p>
+        </div>
       </div>
     </div>
   );
